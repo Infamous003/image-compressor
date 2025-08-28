@@ -1,11 +1,10 @@
 from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
-import os
-from PIL import Image, ImageOps
+from fastapi.responses import StreamingResponse
+from PIL import Image
 from io import BytesIO
 from enum import Enum
 import shutil
-from .tasks import create_thumbnail_task
+from .tasks import create_thumbnail_task, resize_image_task, transform_image_task
 
 class ImageModes(str, Enum):
     BW = "1"
@@ -41,28 +40,22 @@ def create_thumbnail(file: UploadFile = File(),
 def resize_image(width: int,
                  height: int,
                  file: UploadFile = File()):
-    img = Image.open(file.file)
+    filepath = f"uploads/{file.filename}"
+    
+    with open(filepath, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
 
-    size = (width, height)
-    new_img = img.resize(size)
-
-    buffer = BytesIO()
-    new_img.save(buffer, format="PNG")
-
-    buffer.seek(0)
-
-    return StreamingResponse(buffer, media_type="image/png")
+    task = resize_image_task.delay(filepath, width, height)
+    return {"task_id": task.id, "status": "PENDING"}
 
 @app.post("/transform", description="Resize the image, ignoring the aspect ratio")
 def transform_image(mode: ImageModes,
                     file: UploadFile = File()):
-    img = Image.open(file.file)
 
-    new_img = img.convert(mode)
+    filepath = f"uploads/{file.filename}"
+    
+    with open(filepath, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
 
-    buffer = BytesIO()
-    new_img.save(buffer, format="PNG")
-
-    buffer.seek(0)
-    return StreamingResponse(buffer, media_type="image/png")
-
+    task = transform_image_task.delay(filepath, mode)
+    return {"task_id": task.id, "status": "PENDING"}
