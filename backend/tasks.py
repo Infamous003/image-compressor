@@ -3,16 +3,20 @@ from PIL import Image
 import os
 from time import sleep
 
-app = Celery("tasks", broker="redis://localhost")
+celery_app = Celery(
+    "tasks",
+    broker="redis://localhost:6379/0",
+    result_backend="redis://localhost:6379/1"  # or result_backend="redis://localhost:6379/1"
+)
 
-@app.task
+@celery_app.task
 def greet():
     sleep(3)
     return "What's up!?"
 
-@app.task
+@celery_app.task
 def create_thumbnail_task(filepath, w, h):
-    sleep(4)
+    sleep(15)
     img = Image.open(filepath)
     img.thumbnail((w, h))
 
@@ -26,7 +30,7 @@ def create_thumbnail_task(filepath, w, h):
 
     return output_path
 
-@app.task
+@celery_app.task
 def resize_image_task(filepath, w, h):
     img = Image.open(filepath)
     new_img = img.resize((w, h))
@@ -39,7 +43,7 @@ def resize_image_task(filepath, w, h):
 
     return output_path
 
-@app.task
+@celery_app.task
 def transform_image_task(filepath, mode):
     img = Image.open(filepath)
     new_img = img.convert(mode)

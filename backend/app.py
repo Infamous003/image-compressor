@@ -1,20 +1,13 @@
 from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import StreamingResponse
-from PIL import Image
-from io import BytesIO
 from enum import Enum
 import shutil
-from .tasks import create_thumbnail_task, resize_image_task, transform_image_task
+from .tasks import create_thumbnail_task, resize_image_task, transform_image_task, celery_app
+from celery.result import AsyncResult
 
 class ImageModes(str, Enum):
     BW = "1"
     GRAYSCALE = "L"
     P = "P"
-
-class CompressModes(int, Enum):
-    LOW = 85
-    MEDIUM = 70
-    HIGH = 50
 
 app = FastAPI()
 
@@ -59,3 +52,17 @@ def transform_image(mode: ImageModes,
 
     task = transform_image_task.delay(filepath, mode)
     return {"task_id": task.id, "status": "PENDING"}
+
+
+@app.get("/status/{task_id}")
+def get_task_status(task_id: str):
+    task_result = AsyncResult(task_id, app=celery_app)
+    result = None
+    if task_result.successful():
+        result = task_result.result
+
+    return {
+        "task_id": task_id,
+        "status": task_result.status,
+        "result": result
+    }
